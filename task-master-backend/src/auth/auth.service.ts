@@ -6,25 +6,36 @@ import { UsersService } from 'src/users/users.service';
 export class AuthService {
   constructor(private usersService: UsersService) {}
 
+  // Helper function to validate user credentials
   async validateUser(email: string, password: string): Promise<any> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      console.log(`User with email ${email} not found`);
-      return null;
+      return null; // Do not log sensitive data like email
     }
+
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      console.log(`Invalid password for email ${email}`);
-      return null;
+      return null; // Avoid logging invalid credentials
     }
-    const { ...result } = user.toObject();
-    return result;
+
+    // Return the user data without the password field
+    return user.toObject({
+      versionKey: false,
+      transform: (doc, ret) => {
+        delete ret.password; // Remove password field from the returned object
+        return ret;
+      },
+    });
   }
-  async login(email: string, password: string) {
-    const isValide = await this.validateUser(email, password);
-    if (isValide == null) {
+
+  // Main login function to authenticate user
+  async login(email: string, password: string): Promise<any> {
+    const validUser = await this.validateUser(email, password);
+    if (!validUser) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    return isValide;
+
+    // Return the validated user data, excluding sensitive information
+    return validUser;
   }
 }

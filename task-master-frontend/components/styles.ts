@@ -83,8 +83,8 @@ export const SocialButton = styled(AntButton)`
 
   &:hover,
   &:focus {
-    background-color: black; /* Keep background black on hover (disable default effect) */
-    color: white; /* Keep text color white on hover */
+    background-color: #444 !important; /* Override default hover background */
+    color: white !important; /* Override default hover text color */
     border: none; /* Ensure no border on hover */
   }
 

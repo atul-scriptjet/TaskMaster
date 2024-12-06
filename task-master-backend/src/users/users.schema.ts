@@ -16,4 +16,9 @@ export class User extends Document {
   type: 'admin' | 'user';
 }
 
+export enum UserRole {
+  Admin = 'admin',
+  User = 'user',
+}
+
 export const UserSchema = SchemaFactory.createForClass(User);

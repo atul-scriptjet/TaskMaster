@@ -18,6 +18,6 @@ import { JWT_SECRET } from 'src/config';
   ],
   controllers: [AuthController],
   providers: [AuthService, LocalStrategy],
-  exports: [JwtModule],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

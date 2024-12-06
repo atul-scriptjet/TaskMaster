@@ -1,32 +1,46 @@
 import { useState } from "react";
 import { Form, Input, message } from "antd";
-import { UserOutlined, MailOutlined, LockOutlined } from "@ant-design/icons";
-import { SocialButton } from "../styles";
-import { POST } from "@/pages/utils/http"; // Ensure this utility is defined
+import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { SocialButton } from "../styles"; // Styled component for the button
+import { POST } from "@/utils/http"; // Make sure this utility is properly defined
 import { useRouter } from "next/router";
+import { AxiosError } from "axios";
 
-interface SignupFormData {
-  username: string;
+interface LoginFormData {
   email: string;
   password: string;
 }
 
-export default function SignupForm() {
+interface AxiosErrorResponse {
+  response?: {
+    data: {
+      message: string;
+    };
+  };
+}
+
+export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const onFinish = async (values: SignupFormData) => {
+  const onFinish = async (values: LoginFormData) => {
     setLoading(true);
     try {
       // Send a POST request with form data
-      await POST("/auth/register", values);
-      message.success("Signup successful!");
-      router.push("/login");
-    } catch (error: any) {
-      console.error("Error:", error);
-      message.error(
-        error.response?.data?.message || "Signup failed. Please try again.",
-      );
+      await POST("/auth/login", values);
+      message.success("Login successful!");
+      router.push("/");
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        const axiosError = error as AxiosErrorResponse;
+        console.error("Error:", axiosError);
+        message.error(
+          axiosError.response?.data?.message ||
+            "Login failed. Please try again.",
+        );
+      } else {
+        message.error("An unexpected error occurred. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -34,27 +48,13 @@ export default function SignupForm() {
 
   return (
     <Form
-      name="signup"
-      initialValues={{}}
+      name="login"
+      initialValues={{ remember: true }}
       onFinish={onFinish}
       size="large"
       layout="vertical"
       autoComplete="off"
     >
-      <Form.Item
-        label="Username"
-        name="username"
-        rules={[
-          { required: true, message: "Please input your username!" },
-          { min: 3, message: "Username must be at least 3 characters!" },
-        ]}
-      >
-        <Input
-          prefix={<UserOutlined style={{ color: "#9CA3AF" }} />}
-          placeholder="Enter your username"
-        />
-      </Form.Item>
-
       <Form.Item
         label="Email"
         name="email"
@@ -67,8 +67,9 @@ export default function SignupForm() {
         ]}
       >
         <Input
-          prefix={<MailOutlined style={{ color: "#9CA3AF" }} />}
+          prefix={<UserOutlined style={{ color: "#9CA3AF" }} />}
           placeholder="Enter your email"
+          autoFocus
         />
       </Form.Item>
 
@@ -91,7 +92,7 @@ export default function SignupForm() {
 
       <Form.Item>
         <SocialButton htmlType="submit" type="default" loading={loading}>
-          Sign up
+          Sign in
         </SocialButton>
       </Form.Item>
     </Form>

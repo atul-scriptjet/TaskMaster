@@ -1,4 +1,3 @@
-// @ts-ignore
 import { config } from "dotenv";
 import withAntdLess from "next-plugin-antd-less";
 import { env } from "process";
@@ -7,8 +6,11 @@ config();
 
 const nextConfig = {
   reactStrictMode: true,
+  compiler: {
+    styledComponents: true, // This enables styled-components
+  },
   env: {
-    API_URL: env.API_URL,
+    API_URL: env.API_URL, // Ensure API_URL is correctly defined in .env
   },
   transpilePackages: [
     "antd",

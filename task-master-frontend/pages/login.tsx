@@ -1,7 +1,7 @@
 import Link from "next/link";
-import AuthLayout from "./components/auth/AuthLayout";
-import LoginForm from "./components/auth/LoginForm";
-import { FormLink, SignUpText } from "./components/styles";
+import AuthLayout from "../components/auth/AuthLayout";
+import LoginForm from "../components/auth/LoginForm";
+import { FormLink, SignUpText } from "../components/styles";
 
 const Login = () => {
   return (
