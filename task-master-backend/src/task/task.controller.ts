@@ -10,13 +10,14 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { RolesGuard } from 'src/guards/roles.guard';
 import { Roles } from 'src/decorator/roles.decorator';
 import { UserRole } from 'src/users/users.schema';
-import { Task } from './task.schema';
+import { Task, TaskStatus } from './task.schema';
 
 @Controller('tasks')
 export class TaskController {
@@ -27,50 +28,75 @@ export class TaskController {
   @Roles(UserRole.Admin)
   @UseGuards(RolesGuard)
   async findAll() {
-    return this.taskService.findAll();
+    const tasks = await this.taskService.findTasksWithFilters({});
+    return { success: true, data: tasks };
   }
 
   @Post('create')
   @Roles(UserRole.Admin)
   @UseGuards(RolesGuard)
   async create(@Body() task: Task) {
-    return this.taskService.create(task);
+    const newTask = await this.taskService.create(task);
+    return { success: true, data: newTask };
   }
 
   @Post('assign')
   @Roles(UserRole.Admin)
   @UseGuards(RolesGuard)
   async assignTask(@Body() body: { taskId: string; userIds: string[] }) {
-    return this.taskService.assignTask(body.taskId, body.userIds);
+    const task = await this.taskService.assignTask(body.taskId, body.userIds);
+    return { success: true, data: task };
   }
 
   @Delete(':id')
   @Roles(UserRole.Admin)
   @UseGuards(RolesGuard)
   async delete(@Param('id') id: string) {
-    return this.taskService.delete(id);
+    const task = await this.taskService.delete(id);
+    return { success: true, data: task };
   }
 
   // User routes
-
   @Get(':id')
   async findOne(@Param('id') id: string, @Request() req) {
     const user = req.user;
-    const task = await this.taskService.findById(id);
+    const task = await this.taskService.findTaskById(id);
     this.checkTaskPermission(user, task);
-    return task;
+    return { success: true, data: task };
   }
 
-  @Get('filter')
-  async findFilteredTasks(
+  @Get('filter/user/:id') // Combined route
+  async findFilteredTasksByUser(
+    @Param('id') userId: string,
     @Query('status') status: string,
     @Query('priority') priority: string,
     @Query('dueDate') dueDate: string,
     @Request() req,
   ) {
     const user = req.user;
-    const query: any = this.buildQuery(status, priority, dueDate, user);
-    return this.taskService.findByQuery(query);
+
+    // Ensure that the user is either an admin or the task owner
+    if (user.role !== UserRole.Admin && user._id.toString() !== userId) {
+      throw new ForbiddenException(
+        'You are not authorized to view tasks for this user',
+      );
+    }
+
+    // Build the query for filters
+    const query = this.buildQuery(status, priority, dueDate, userId);
+
+    // Fetch tasks using the combined query
+    const tasks = await this.taskService.findTasksWithFilters(query);
+
+    if (tasks.length === 0) {
+      return {
+        data: [],
+        message: 'No tasks match the given query',
+        success: true,
+      };
+    }
+
+    return { success: true, data: tasks };
   }
 
   @Put('update/:id')
@@ -80,17 +106,19 @@ export class TaskController {
     @Request() req,
   ) {
     const user = req.user;
-    const taskToUpdate = await this.taskService.findById(id);
+    const taskToUpdate = await this.taskService.findTaskById(id);
     this.checkTaskPermission(user, taskToUpdate);
-    return this.taskService.update(id, task);
+    const updatedTask = await this.taskService.update(id, task);
+    return { success: true, data: updatedTask };
   }
 
   @Delete('delete/:id')
   async deleteTask(@Param('id') id: string, @Request() req) {
     const user = req.user;
-    const taskToDelete = await this.taskService.findById(id);
+    const taskToDelete = await this.taskService.findTaskById(id);
     this.checkTaskPermission(user, taskToDelete);
-    return this.taskService.delete(id);
+    const deletedTask = await this.taskService.delete(id);
+    return { success: true, data: deletedTask };
   }
 
   @Put('updateStatus/:id')
@@ -100,14 +128,16 @@ export class TaskController {
     @Request() req,
   ) {
     const user = req.user;
-    const taskToUpdate = await this.taskService.findById(id);
+    const taskToUpdate = await this.taskService.findTaskById(id);
     this.checkTaskPermission(user, taskToUpdate);
-    return this.taskService.changeStatus(id, task.status);
+
+    this.validateStatus(task.status);
+
+    const updatedTask = await this.taskService.changeStatus(id, task.status);
+    return { success: true, data: updatedTask };
   }
 
-  /**
-   * Helper method to check if the user has permission to access the task.
-   */
+  // Helper method to check if the user has permission to access the task.
   private checkTaskPermission(user: any, task: Task) {
     if (
       user.role !== UserRole.Admin &&
@@ -119,20 +149,13 @@ export class TaskController {
     }
   }
 
-  /**
-   * Helper method to build the query for filtered tasks.
-   */
   private buildQuery(
     status: string,
     priority: string,
     dueDate: string,
-    user: any,
+    userId: string,
   ): any {
-    const query: any = {};
-
-    if (user.role !== UserRole.Admin) {
-      query.assignedTo = user._id;
-    }
+    const query: any = { assignedTo: userId }; // Ensure it filters by userId
 
     if (status) {
       this.validateStatus(status);
@@ -151,19 +174,20 @@ export class TaskController {
     return query;
   }
 
-  /**
-   * Validate the status value.
-   */
   private validateStatus(status: string) {
-    const validStatuses = ['open', 'in-progress', 'completed'];
+    const validStatuses = [
+      'pending',
+      'completed',
+      'cancelled',
+      'not-started',
+      'in-progress',
+      'on-hold',
+    ];
     if (!validStatuses.includes(status)) {
       throw new BadRequestException(`Invalid status value: ${status}`);
     }
   }
 
-  /**
-   * Validate the priority value.
-   */
   private validatePriority(priority: string) {
     const validPriorities = ['low', 'medium', 'high'];
     if (!validPriorities.includes(priority)) {
@@ -171,21 +195,18 @@ export class TaskController {
     }
   }
 
-  /**
-   * Parse the dueDate query parameter into a MongoDB date range or single date.
-   */
-  private parseDueDate(dueDate: string) {
+  private parseDueDate(dueDate: string): Date | any {
     const dueDateRange = dueDate.split(',');
     if (dueDateRange.length === 2) {
       const [startDate, endDate] = dueDateRange.map((date) => new Date(date));
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        throw new BadRequestException(`Invalid date range: ${dueDate}`);
+        throw new BadRequestException(`Invalid date range format: ${dueDate}`);
       }
       return { $gte: startDate, $lte: endDate };
     } else {
       const date = new Date(dueDate);
       if (isNaN(date.getTime())) {
-        throw new BadRequestException(`Invalid date: ${dueDate}`);
+        throw new BadRequestException(`Invalid date format: ${dueDate}`);
       }
       return date;
     }

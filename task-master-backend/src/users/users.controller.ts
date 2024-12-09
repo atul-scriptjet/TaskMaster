@@ -22,7 +22,8 @@ export class UsersController {
   @UseGuards(RolesGuard) // Guard to enforce role-based access
   async findAll() {
     try {
-      return await this.usersService.getAll();
+      const users = await this.usersService.getAll();
+      return { success: true, data: users };
     } catch (error) {
       throw new InternalServerErrorException('Error fetching users', error);
     }

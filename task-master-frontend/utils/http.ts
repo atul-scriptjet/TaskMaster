@@ -1,9 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
 import Axios, { AxiosRequestConfig, AxiosInstance } from "axios";
 
 // Create an Axios instance with default configurations
-
 console.log("process.env.API_URL:", process.env.API_URL);
 const axiosInstance: AxiosInstance = Axios.create({
   baseURL: process.env.API_URL, // Set your base URL from environment variables
@@ -68,3 +66,5 @@ export const DELETE = async <A = any, B = any>(
   const response = await axios().delete<ApiResponse<B>>(url, config);
   return response.data;
 };
+
+export default axios;

@@ -30,3 +30,11 @@ export class Task extends Document {
 }
 
 export const TaskSchema = SchemaFactory.createForClass(Task);
+
+export type TaskStatus =
+  | 'pending'
+  | 'completed'
+  | 'cancelled'
+  | 'not-started'
+  | 'in-progress'
+  | 'on-hold';

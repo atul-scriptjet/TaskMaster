@@ -29,7 +29,7 @@ export default function LoginForm() {
       // Send a POST request with form data
       await POST("/auth/login", values);
       message.success("Login successful!");
-      router.push("/");
+      router.push("/tasks");
     } catch (error: unknown) {
       if (error instanceof AxiosError) {
         const axiosError = error as AxiosErrorResponse;

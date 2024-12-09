@@ -1,6 +1,6 @@
 import Link from "next/link";
-import AuthLayout from "../components/auth/AuthLayout";
-import LoginForm from "../components/auth/LoginForm";
+import AuthLayout from "../components/Auth/AuthLayout";
+import LoginForm from "../components/Auth/LoginForm";
 import { FormLink, SignUpText } from "../components/styles";
 
 const Login = () => {

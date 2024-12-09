@@ -60,12 +60,28 @@ export class AuthController {
       const payload = { email: user.email, _id: user._id, role: user.type };
       const accessToken = this.generateAccessToken(payload);
 
-      this.setCookie(res, accessToken);
+      this.setCookie(res, accessToken, payload);
 
       return res.send({ message: 'Logged in successfully' });
     } catch (error) {
       throw new BadRequestException('Invalid credentials', error);
     }
+  }
+
+  @Post('logout')
+  logout(@Res() res: Response) {
+    res.clearCookie('access_token', {
+      path: '/', // Ensure path matches
+      sameSite: 'none', // Corrected to lowercase 'none'
+      secure: true, // Ensure the secure flag matches
+    });
+    res.clearCookie('role', {
+      path: '/', // Ensure path matches
+      sameSite: 'none', // Corrected to lowercase 'none'
+      secure: true, // Ensure the secure flag matches
+    });
+
+    return res.send({ message: 'Logged out successfully' });
   }
 
   /**
@@ -82,11 +98,20 @@ export class AuthController {
    * @param res - Express response object.
    * @param accessToken - The JWT token to be set.
    */
-  private setCookie(res: Response, accessToken: string): void {
+  private setCookie(
+    res: Response,
+    accessToken: string,
+    user: { email: string; _id: string; role: string },
+  ): void {
     res.cookie('access_token', accessToken, {
       httpOnly: true,
-      secure: NODE_ENV === 'production', // Ensure the cookie is sent only over HTTPS in production
-      sameSite: NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-origin requests in production
+      secure: NODE_ENV === 'production', // Ensures the cookie is sent over HTTPS in production
+      sameSite: 'none', // Corrected to lowercase 'none'
+      maxAge: 60 * 60 * 1000, // Token expires after 1 hour
+    });
+    res.cookie('user', user, {
+      secure: NODE_ENV === 'production', // Ensures the cookie is sent over HTTPS in production
+      sameSite: 'none', // Corrected to lowercase 'none'
       maxAge: 60 * 60 * 1000, // Token expires after 1 hour
     });
   }

@@ -1,10 +1,11 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Task } from './task.schema';
+import { Task, TaskStatus } from './task.schema';
 import { Model } from 'mongoose';
 import mongoose from 'mongoose';
 
@@ -13,7 +14,7 @@ export class TaskService {
   constructor(@InjectModel(Task.name) private taskModel: Model<Task>) {}
 
   // Helper function to handle task existence checks
-  private async findTaskById(id: string): Promise<Task> {
+  async findTaskById(id: string): Promise<Task> {
     try {
       const task = await this.taskModel.findById(id).exec();
       if (!task) {
@@ -28,20 +29,75 @@ export class TaskService {
     }
   }
 
-  async findAll(): Promise<Task[]> {
+  async changeStatus(id: string, status: TaskStatus): Promise<Task> {
     try {
-      const tasks = await this.taskModel.find().exec();
-      if (tasks.length === 0) {
-        throw new NotFoundException('No tasks found');
-      }
-      return tasks;
+      const task = await this.findTaskById(id);
+      task.status = status;
+      return await task.save();
     } catch (error) {
-      throw new InternalServerErrorException('Failed to retrieve tasks', error);
+      throw new InternalServerErrorException(
+        'Error updating task status',
+        error.message,
+      );
     }
   }
 
-  async findById(id: string): Promise<Task> {
-    return this.findTaskById(id);
+  async assignTask(taskId: string, userIds: string[]): Promise<Task> {
+    try {
+      if (
+        userIds.length === 0 ||
+        !userIds.every((id) => mongoose.Types.ObjectId.isValid(id))
+      ) {
+        throw new BadRequestException('Invalid user IDs provided');
+      }
+
+      const task = await this.findTaskById(taskId);
+      task.assignedTo = userIds.map((id) => new mongoose.Types.ObjectId(id));
+
+      return await task.save();
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Error assigning task',
+        error.message,
+      );
+    }
+  }
+
+  async findTasksWithFilters(query: any): Promise<any> {
+    try {
+      const filterQuery: any = {};
+
+      if (query.status) filterQuery.status = query.status;
+      if (query.priority) filterQuery.priority = query.priority;
+      if (query.dueDate) filterQuery.dueDate = query.dueDate;
+
+      // Handling user filter for assignedTo
+      if (query.assignedTo) {
+        if (!mongoose.Types.ObjectId.isValid(query.assignedTo)) {
+          throw new BadRequestException(
+            `Invalid assigned user ID: ${query.assignedTo}`,
+          );
+        }
+        filterQuery.assignedTo = new mongoose.Types.ObjectId(query.assignedTo);
+      }
+
+      const tasks = await this.taskModel.find(filterQuery).exec();
+
+      // Return an empty array and a message if no tasks are found
+      if (tasks.length === 0) {
+        return [];
+      }
+
+      return tasks;
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to query tasks',
+        error.message,
+      );
+    }
   }
 
   async create(task: Task): Promise<Task> {
@@ -49,7 +105,10 @@ export class TaskService {
       const newTask = new this.taskModel(task);
       return await newTask.save();
     } catch (error) {
-      throw new InternalServerErrorException('Error creating task', error);
+      throw new InternalServerErrorException(
+        'Error creating task',
+        error.message,
+      );
     }
   }
 
@@ -63,7 +122,10 @@ export class TaskService {
       }
       return updatedTask;
     } catch (error) {
-      throw new InternalServerErrorException('Failed to update task', error);
+      throw new InternalServerErrorException(
+        'Failed to update task',
+        error.message,
+      );
     }
   }
 
@@ -75,85 +137,9 @@ export class TaskService {
       }
       return deletedTask;
     } catch (error) {
-      throw new InternalServerErrorException('Failed to delete task', error);
-    }
-  }
-
-  async findByQuery(query: any): Promise<Task[]> {
-    try {
-      const filterQuery: any = {};
-
-      if (query.status) {
-        filterQuery.status = query.status;
-      }
-
-      if (query.priority) {
-        filterQuery.priority = query.priority;
-      }
-
-      if (query.dueDate) {
-        filterQuery.dueDate = this.parseDueDate(query.dueDate);
-      }
-
-      return await this.taskModel.find(filterQuery).exec();
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to query tasks', error);
-    }
-  }
-
-  private parseDueDate(dueDate: string) {
-    const dueDateRange = dueDate.split(',');
-    if (dueDateRange.length === 2) {
-      const [startDate, endDate] = dueDateRange.map((date) => new Date(date));
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        throw new InternalServerErrorException(
-          `Invalid date range: ${dueDate}`,
-        );
-      }
-      return { $gte: startDate, $lte: endDate };
-    } else {
-      const date = new Date(dueDate);
-      if (isNaN(date.getTime())) {
-        throw new InternalServerErrorException(`Invalid date: ${dueDate}`);
-      }
-      return date;
-    }
-  }
-
-  async assignTask(taskId: string, userIds: string[]): Promise<Task> {
-    try {
-      const task = await this.findTaskById(taskId);
-
-      const userObjectIds = userIds.map(
-        (id) => new mongoose.Types.ObjectId(id),
-      );
-
-      task.assignedTo = userObjectIds;
-      return await task.save();
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to assign task', error);
-    }
-  }
-
-  // Method to change the status of a task
-  async changeStatus(
-    taskId: string,
-    status:
-      | 'pending'
-      | 'in-progress'
-      | 'completed'
-      | 'cancelled'
-      | 'not-started'
-      | 'on-hold',
-  ): Promise<Task> {
-    try {
-      const task = await this.findTaskById(taskId);
-      task.status = status;
-      return await task.save();
-    } catch (error) {
       throw new InternalServerErrorException(
-        'Failed to change task status',
-        error,
+        'Failed to delete task',
+        error.message,
       );
     }
   }
