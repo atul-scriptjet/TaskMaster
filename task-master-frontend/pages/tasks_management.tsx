@@ -28,6 +28,7 @@ import { GET, POST, DELETE } from "../utils/http";
 import { Task } from "@/types/task";
 import { User } from "@/types/user";
 import { getPriorityColor, getStatusColor } from "@/utils/color";
+import { AxiosError } from "axios";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -73,7 +74,7 @@ const AdminTaskDashboard: React.FC = () => {
   }, [fetchData]);
 
   // Centralized error handling
-  const handleApiError = (action: string, error: any) => {
+  const handleApiError = (action: string, error: AxiosError) => {
     console.error(`Failed to ${action}`, error);
     message.error(`Failed to ${action}`);
   };
@@ -99,7 +100,7 @@ const AdminTaskDashboard: React.FC = () => {
         form.resetFields();
       }
     } catch (error) {
-      handleApiError("create task", error);
+      handleApiError("create task", error as AxiosError);
     }
   };
 
@@ -126,7 +127,7 @@ const AdminTaskDashboard: React.FC = () => {
         setIsAssignModalVisible(false);
       }
     } catch (error) {
-      handleApiError("assign task", error);
+      handleApiError("assign task", error as AxiosError);
     }
   };
 
@@ -141,7 +142,7 @@ const AdminTaskDashboard: React.FC = () => {
         );
       }
     } catch (error) {
-      handleApiError("delete task", error);
+      handleApiError("delete task", error as AxiosError);
     }
   };
 

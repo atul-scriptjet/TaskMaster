@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Table,
   Tag,
@@ -13,8 +13,9 @@ import {
 } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import moment from "moment";
-import Cookies from "js-cookie";
 import { DELETE, GET, PUT } from "@/utils/http";
+import { AxiosErrorResponse } from "@/types/auth.type";
+import useUserAuth from "@/hooks/useUserAuth";
 
 // Constants with Improved Type Safety
 const TASK_STATUSES = {
@@ -62,39 +63,38 @@ type Task = {
   assignedTo: string[];
 };
 
-// Utility Functions
-const handleApiError = (error: any, defaultMessage: string) => {
-  console.error(error);
-  message.error(
-    error.response?.data?.message || error.message || defaultMessage,
+// Refined type guard for AxiosErrorResponse
+const isAxiosErrorResponse = (error: unknown): error is AxiosErrorResponse => {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response: unknown }).response === "object" &&
+    "data" in (error as { response: { data: unknown } }).response &&
+    typeof (error as { response: { data: unknown } }).response.data ===
+      "object" &&
+    "message" in
+      (error as { response: { data: { message: string } } }).response.data
   );
 };
 
-// Authentication Hook
-const useUserAuth = () => {
-  const [userId, setUserId] = useState<string | undefined>();
+// Updated error handler using the type-safe guard
+const handleApiError = (error: unknown, defaultMessage: string) => {
+  console.error(error);
 
-  useEffect(() => {
-    const getUserFromCookie = () => {
-      try {
-        const userCookie = Cookies.get("user");
-        if (userCookie) {
-          const cleanedUserCookie = userCookie.startsWith("j:")
-            ? userCookie.slice(2)
-            : userCookie;
-          const user = JSON.parse(cleanedUserCookie);
-          return user._id;
-        }
-      } catch (error) {
-        console.error("Invalid user cookie:", error);
-      }
-      return undefined;
-    };
+  // Check if the error is of type AxiosErrorResponse
+  if (isAxiosErrorResponse(error)) {
+    // Use optional chaining to avoid accessing properties of 'undefined'
+    const errorMessage = error.response?.data?.message || defaultMessage;
 
-    setUserId(getUserFromCookie());
-  }, []);
-
-  return { userId };
+    // Ensure message.error gets a string
+    message.error(
+      typeof errorMessage === "string" ? errorMessage : defaultMessage,
+    );
+  } else {
+    // If error doesn't match the expected structure, show the default message
+    message.error(defaultMessage);
+  }
 };
 
 // API Service
@@ -106,10 +106,7 @@ const taskService = {
         `/tasks/filter/user/${userId}?${queryString}`,
       );
 
-      if (!response.success) {
-        throw new Error("Failed to fetch tasks");
-      }
-      if (!response.data) {
+      if (!response.success || !response.data) {
         throw new Error("Failed to fetch tasks");
       }
       return response.data;
@@ -160,74 +157,69 @@ const TaskList: React.FC = () => {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [form] = Form.useForm();
 
-  // Memoized Columns
-  const columns = useMemo(
-    () => [
-      {
-        title: "Title",
-        dataIndex: "title",
-        key: "title",
-      },
-      {
-        title: "Description",
-        dataIndex: "description",
-        render: (description: string) => description || "No description",
-      },
-      {
-        title: "Status",
-        dataIndex: "status",
-        render: (status: TaskStatus) => {
-          const statusKey = Object.keys(TASK_STATUSES).find(
-            (key) =>
-              TASK_STATUSES[key as keyof typeof TASK_STATUSES] === status,
-          ) as keyof typeof TASK_STATUSES;
-          return (
-            <Tag color={STATUS_COLOR_MAP[statusKey]}>
-              {status.toUpperCase()}
-            </Tag>
-          );
-        },
-      },
-      {
-        title: "Priority",
-        dataIndex: "priority",
-        render: (priority: TaskPriority) => {
-          const priorityKey = Object.keys(TASK_PRIORITIES).find(
-            (key) =>
-              TASK_PRIORITIES[key as keyof typeof TASK_PRIORITIES] === priority,
-          ) as keyof typeof TASK_PRIORITIES;
-          return (
-            <Tag color={PRIORITY_COLOR_MAP[priorityKey]}>
-              {priority.toUpperCase()}
-            </Tag>
-          );
-        },
-      },
-      {
-        title: "Due Date",
-        dataIndex: "dueDate",
-        render: (date: Date) =>
-          date ? moment(date).format("MMMM D, YYYY") : "No due date",
-      },
-      {
-        title: "Actions",
-        render: (record: Task) => (
-          <Space>
-            <Button
-              icon={<EditOutlined />}
-              onClick={() => handleEditTask(record)}
-            />
-            <Button
-              icon={<DeleteOutlined />}
-              onClick={() => handleDeleteTask(record._id)}
-              danger
-            />
-          </Space>
-        ),
-      },
-    ],
-    [userId],
-  );
+  // Columns definition (memoization removed, simplified)
+  const columns = [
+    {
+      title: "Title",
+      dataIndex: "title",
+      key: "title",
+    },
+    {
+      title: "Description",
+      dataIndex: "description",
+      render: (description: string) => description || "No description",
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      render: (status: TaskStatus) => (
+        <Tag
+          color={
+            STATUS_COLOR_MAP[status.toUpperCase() as keyof typeof TASK_STATUSES]
+          }
+        >
+          {status.toUpperCase()}
+        </Tag>
+      ),
+    },
+    {
+      title: "Priority",
+      dataIndex: "priority",
+      render: (priority: TaskPriority) => (
+        <Tag
+          color={
+            PRIORITY_COLOR_MAP[
+              priority.toUpperCase() as keyof typeof TASK_PRIORITIES
+            ]
+          }
+        >
+          {priority.toUpperCase()}
+        </Tag>
+      ),
+    },
+    {
+      title: "Due Date",
+      dataIndex: "dueDate",
+      render: (date: Date) =>
+        date ? moment(date).format("MMMM D, YYYY") : "No due date",
+    },
+    {
+      title: "Actions",
+      render: (record: Task) => (
+        <Space>
+          <Button
+            icon={<EditOutlined />}
+            onClick={() => handleEditTask(record)}
+          />
+          <Button
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteTask(record._id)}
+            danger
+          />
+        </Space>
+      ),
+    },
+  ];
 
   // Fetch Tasks
   const fetchTasks = useCallback(async () => {
@@ -427,5 +419,4 @@ const TaskList: React.FC = () => {
     </div>
   );
 };
-
 export default TaskList;
